@@ -6,51 +6,61 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const DEFAULT_GUEST = 'Distinguished Guest';
-const DEFAULT_MESSAGE =
-  'We are thrilled to have you here today, Our team is dedicated to making your visit comfortable and Inspiring.';
-
 export async function GET(request: Request) {
-  // Verify authorization header from Vercel Cron
+  // 1. Verify Authorization Header from cron-job.org
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const now = new Date().toISOString();
 
-  // Find current active schedule
-  const { data: activeSchedule } = await supabase
-    .from('schedules')
-    .select('guest_name, message')
-    .filter('is_active', 'eq', true)
-    .filter('start_time', 'lte', now)
-    .filter('end_time', 'gte', now)
-    .order('start_time', { ascending: false })
-    .limit(1)
-    .single();
+  try {
+    // 2. Fetch the current active schedule matching current time
+    const { data: activeSchedule, error: fetchErr } = await supabase
+      .from('schedules')
+      .select('*')
+      .lte('start_time', now)
+      .gte('end_time', now)
+      .eq('is_active', true)
+      .order('start_time', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (activeSchedule) {
-    // Update live screen with active schedule
-    await supabase
-      .from('welcome_screen')
-      .update({
-        guest_name: activeSchedule.guest_name,
-        message: activeSchedule.message,
-        updated_at: now,
-      })
-      .eq('id', 1);
-  } else {
-    // Revert to default text if no active schedule exists
-    await supabase
-      .from('welcome_screen')
-      .update({
-        guest_name: DEFAULT_GUEST,
-        message: DEFAULT_MESSAGE,
-        updated_at: now,
-      })
-      .eq('id', 1);
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+
+    // 3. If an active schedule is found, push update live to welcome_screen
+    if (activeSchedule) {
+      const { error: updateErr } = await supabase
+        .from('welcome_screen')
+        .update({
+          guest_name: activeSchedule.guest_name,
+          message: activeSchedule.message,
+          updated_at: now,
+        })
+        .eq('id', 1);
+
+      if (updateErr) {
+        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        status: 'Updated live display from schedule',
+        guest: activeSchedule.guest_name,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      status: 'No active schedule at this time',
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message || 'Internal Server Error' },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ success: true, timestamp: now });
 }
