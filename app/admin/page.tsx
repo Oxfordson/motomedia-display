@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -152,12 +153,21 @@ export default function AdminPage() {
           <h1 className="text-2xl font-bold text-[#000000]">
             Reception Display Manager
           </h1>
-          <button
-            onClick={() => setIsAuthenticated(false)}
-            className="text-xs text-gray-500 underline hover:text-black"
-          >
-            Lock Admin
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/display"
+              target="_blank"
+              className="text-xs bg-[#2B2626] text-white font-semibold px-3 py-1.5 rounded-md hover:bg-black transition"
+            >
+              View Display ↗
+            </Link>
+            <button
+              onClick={() => setIsAuthenticated(false)}
+              className="text-xs text-gray-500 underline hover:text-black"
+            >
+              Lock Admin
+            </button>
+          </div>
         </div>
         <p className="text-sm text-gray-600 mb-6">
           Update the display screen live or schedule upcoming visits.
